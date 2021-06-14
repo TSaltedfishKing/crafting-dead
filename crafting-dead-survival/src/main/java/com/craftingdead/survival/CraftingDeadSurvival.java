@@ -20,9 +20,13 @@ package com.craftingdead.survival;
 
 import java.util.ListIterator;
 import org.apache.commons.lang3.tuple.Pair;
-import com.craftingdead.core.capability.ModCapabilities;
+import com.craftingdead.core.capability.Capabilities;
 import com.craftingdead.core.event.GunEvent;
 import com.craftingdead.core.event.LivingExtensionEvent;
+import com.craftingdead.core.world.action.Action;
+import com.craftingdead.core.world.action.ActionTypes;
+import com.craftingdead.core.world.action.item.ItemAction;
+import com.craftingdead.core.world.entity.extension.LivingExtension;
 import com.craftingdead.core.world.entity.extension.PlayerExtension;
 import com.craftingdead.core.world.item.ModItems;
 import com.craftingdead.survival.client.ClientDist;
@@ -50,6 +54,7 @@ import net.minecraft.data.DataGenerator;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.EntityClassification;
 import net.minecraft.entity.EntityType;
+import net.minecraft.entity.monster.ZombieEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -166,6 +171,21 @@ public class CraftingDeadSurvival {
   // ================================================================================
 
   @SubscribeEvent
+  public void handlePerformAction(LivingExtensionEvent.PerformAction<ItemAction> event) {
+    Action action = event.getAction();
+    LivingExtension<?, ?> target = action.getTarget().orElse(null);
+    if (action.getType() == ActionTypes.USE_SYRINGE.get()
+        && target != null
+        && target.getEntity() instanceof ZombieEntity) {
+      event.setCanceled(true);
+      event.getLiving().performAction(
+          SurvivalActionTypes.USE_SYRINGE_ON_ZOMBIE.get().createAction(action.getPerformer(),
+              target),
+          true);
+    }
+  }
+
+  @SubscribeEvent
   public void handleMissingBlockMappings(RegistryEvent.MissingMappings<Block> event) {
     event.getMappings(H_CD_SERVER_CORE_ID).forEach(mapping -> {
       Block newBlock = mapping.registry.getValue(new ResourceLocation(ID, mapping.key.getPath()));
@@ -197,7 +217,7 @@ public class CraftingDeadSurvival {
   @SubscribeEvent
   public void handleRightClickItem(PlayerInteractEvent.RightClickItem event) {
     if (!event.getWorld().isClientSide()
-        && event.getItemStack().getCapability(ModCapabilities.CLOTHING).isPresent()) {
+        && event.getItemStack().getCapability(Capabilities.CLOTHING).isPresent()) {
       PlayerExtension<?> extension = PlayerExtension.getExpected(event.getPlayer());
       extension.performAction(
           SurvivalActionTypes.SHRED_CLOTHING.get().createAction(extension, null), true);
@@ -206,7 +226,7 @@ public class CraftingDeadSurvival {
 
   @SubscribeEvent
   public void handleGunHitEntity(GunEvent.HitEntity event) {
-    event.getTarget().getCapability(ModCapabilities.LIVING)
+    event.getTarget().getCapability(Capabilities.LIVING)
         .resolve()
         .flatMap(living -> living.getHandler(SurvivalPlayerHandler.ID))
         .map(living -> (SurvivalPlayerHandler) living)

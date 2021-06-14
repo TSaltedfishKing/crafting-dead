@@ -19,8 +19,8 @@
 package com.craftingdead.core.world.inventory;
 
 import java.util.function.BiPredicate;
-import com.craftingdead.core.capability.ModCapabilities;
-import com.craftingdead.core.world.item.AttachmentItem;
+import com.craftingdead.core.capability.Capabilities;
+import com.craftingdead.core.world.gun.attachment.AttachmentLike;
 import com.craftingdead.core.world.item.HatItem;
 import com.craftingdead.core.world.item.MeleeWeaponItem;
 import net.minecraft.entity.player.PlayerEntity;
@@ -41,7 +41,7 @@ public class EquipmentMenu extends Container {
 
   public EquipmentMenu(int windowId, PlayerInventory playerInventory) {
     super(ModMenuTypes.EQUIPMENT.get(), windowId);
-    this.itemHandler = playerInventory.player.getCapability(ModCapabilities.LIVING)
+    this.itemHandler = playerInventory.player.getCapability(Capabilities.LIVING)
         .orElseThrow(() -> new IllegalStateException("No living capability")).getItemHandler();
     this.craftingInventory.addListener(this::slotsChanged);
 
@@ -61,26 +61,26 @@ public class EquipmentMenu extends Container {
     int equipmentColumnX = 8 + (slotSize * 3);
     int equipmentColumnY = 8;
 
-    this.addSlot(new PredicateItemHandlerSlot(this.itemHandler, InventorySlotType.GUN.getIndex(),
+    this.addSlot(new PredicateItemHandlerSlot(this.itemHandler, ModEquipmentSlotType.GUN.getIndex(),
         equipmentColumnX, equipmentColumnY,
-        (slot, itemStack) -> itemStack.getCapability(ModCapabilities.GUN).isPresent()));
+        (slot, itemStack) -> itemStack.getCapability(Capabilities.GUN).isPresent()));
 
-    this.addSlot(new PredicateItemHandlerSlot(this.itemHandler, InventorySlotType.MELEE.getIndex(),
+    this.addSlot(new PredicateItemHandlerSlot(this.itemHandler, ModEquipmentSlotType.MELEE.getIndex(),
         equipmentColumnX, equipmentColumnY += slotSize,
         (slot, itemStack) -> itemStack.getItem() instanceof MeleeWeaponItem));
 
-    this.addSlot(new PredicateItemHandlerSlot(this.itemHandler, InventorySlotType.HAT.getIndex(),
+    this.addSlot(new PredicateItemHandlerSlot(this.itemHandler, ModEquipmentSlotType.HAT.getIndex(),
         equipmentColumnX, equipmentColumnY += slotSize,
         (slot, itemStack) -> itemStack.getItem() instanceof HatItem));
 
     this.addSlot(new PredicateItemHandlerSlot(this.itemHandler,
-        InventorySlotType.CLOTHING.getIndex(), equipmentColumnX, equipmentColumnY += slotSize,
-        (slot, itemStack) -> itemStack.getCapability(ModCapabilities.CLOTHING).isPresent()));
+        ModEquipmentSlotType.CLOTHING.getIndex(), equipmentColumnX, equipmentColumnY += slotSize,
+        (slot, itemStack) -> itemStack.getCapability(Capabilities.CLOTHING).isPresent()));
 
-    this.addSlot(new PredicateItemHandlerSlot(this.itemHandler, InventorySlotType.VEST.getIndex(),
+    this.addSlot(new PredicateItemHandlerSlot(this.itemHandler, ModEquipmentSlotType.VEST.getIndex(),
         equipmentColumnX + slotSize, equipmentColumnY, (slot, itemStack) -> itemStack
-            .getCapability(ModCapabilities.STORAGE)
-            .map(storage -> storage.isValidForSlot(InventorySlotType.VEST))
+            .getCapability(Capabilities.STORAGE)
+            .map(storage -> storage.isValidForSlot(ModEquipmentSlotType.VEST))
             .orElse(false)));
 
     final int gunCraftSlotGap = 3;
@@ -90,12 +90,12 @@ public class EquipmentMenu extends Container {
         this.craftingInventory));
 
     final BiPredicate<PredicateSlot, ItemStack> attachmentAndPaintPredicate =
-        (slot, itemStack) -> this.getGunStack().getCapability(ModCapabilities.GUN)
+        (slot, itemStack) -> this.getGunStack().getCapability(Capabilities.GUN)
             .map(gun -> gun.isAcceptedPaintOrAttachment(itemStack)).orElse(false);
     final BiPredicate<PredicateSlot, ItemStack> attachmentPredicate =
-        (slot, itemStack) -> itemStack.getItem() instanceof AttachmentItem
-            && ((AttachmentItem) itemStack.getItem()).getInventorySlot().getIndex() == slot
-                .getSlotIndex();
+        (slot, itemStack) -> itemStack.getItem() instanceof AttachmentLike
+            && ((AttachmentLike) itemStack.getItem())
+                .asAttachment().getInventorySlot().getIndex() == slot.getSlotIndex();
 
     this.addSlot(new PredicateSlot(this.craftingInventory,
         GunCraftSlotType.MUZZLE_ATTACHMENT.getIndex(), 104,
@@ -109,12 +109,9 @@ public class EquipmentMenu extends Container {
         GunCraftSlotType.OVERBARREL_ATTACHMENT.getIndex(), 125, gunCraftY,
         attachmentPredicate.and(attachmentAndPaintPredicate)));
 
-    final BiPredicate<PredicateSlot, ItemStack> paintPredicate =
-        (slot, itemStack) -> itemStack.getCapability(ModCapabilities.PAINT).isPresent();
-
     this.addSlot(new PredicateSlot(this.craftingInventory,
         GunCraftSlotType.PAINT.getIndex(), 146, gunCraftY + slotSize + gunCraftSlotGap,
-        paintPredicate.and(attachmentAndPaintPredicate)));
+        attachmentAndPaintPredicate));
   }
 
   @Override
@@ -144,7 +141,7 @@ public class EquipmentMenu extends Container {
   }
 
   public boolean isCraftable() {
-    return this.getGunStack().getCapability(ModCapabilities.GUN)
+    return this.getGunStack().getCapability(Capabilities.GUN)
         .map(gunController -> {
           for (int i = 0; i < this.craftingInventory.getContainerSize(); i++) {
             ItemStack itemStack = this.craftingInventory.getItem(i);
@@ -169,14 +166,14 @@ public class EquipmentMenu extends Container {
 
       ItemStack clickedStack = clickedSlot.getItem();
 
-      if (clickedIndex < 27) {
+      if (clickedIndex < 36) {
         // Pushes the clicked stack to the higher slots in a "negative direction"
-        if (!this.moveItemStackTo(clickedStack, 27, this.slots.size(), true)) {
+        if (!this.moveItemStackTo(clickedStack, 36, this.slots.size(), true)) {
           return ItemStack.EMPTY;
         }
       } else {
         // Pushes the clicked stack to the lower slots in a "positive direction"
-        if (!this.moveItemStackTo(clickedStack, 0, 27, false)) {
+        if (!this.moveItemStackTo(clickedStack, 0, 36, false)) {
           return ItemStack.EMPTY;
         }
       }

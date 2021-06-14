@@ -19,14 +19,14 @@
 package com.craftingdead.core.world.entity.grenade;
 
 import com.craftingdead.core.CraftingDead;
-import com.craftingdead.core.capability.ModCapabilities;
+import com.craftingdead.core.capability.Capabilities;
 import com.craftingdead.core.particle.RGBFlashParticleData;
 import com.craftingdead.core.world.effect.FlashBlindnessMobEffect;
 import com.craftingdead.core.world.effect.ModMobEffects;
 import com.craftingdead.core.world.entity.EntityUtil;
 import com.craftingdead.core.world.entity.ModEntityTypes;
 import com.craftingdead.core.world.hat.Hat;
-import com.craftingdead.core.world.inventory.InventorySlotType;
+import com.craftingdead.core.world.inventory.ModEquipmentSlotType;
 import com.craftingdead.core.world.item.GrenadeItem;
 import com.craftingdead.core.world.item.ModItems;
 import net.minecraft.entity.EntityType;
@@ -121,12 +121,12 @@ public class FlashGrenadeEntity extends GrenadeEntity {
     }
 
     ItemStack hatItemStack = viewerEntity
-        .getCapability(ModCapabilities.LIVING)
-        .map(living -> living.getItemHandler().getStackInSlot(InventorySlotType.HAT.getIndex()))
+        .getCapability(Capabilities.LIVING)
+        .map(living -> living.getItemHandler().getStackInSlot(ModEquipmentSlotType.HAT.getIndex()))
         .orElse(ItemStack.EMPTY);
 
     final boolean isImmuneToFlashes =
-        hatItemStack.getCapability(ModCapabilities.HAT).map(Hat::isImmuneToFlashes).orElse(false);
+        hatItemStack.getCapability(Capabilities.HAT).map(Hat::isImmuneToFlashes).orElse(false);
 
     if (insideFOV && !isImmuneToFlashes) {
       double distanceProportion =

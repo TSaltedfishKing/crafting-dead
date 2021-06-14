@@ -20,9 +20,9 @@ package com.craftingdead.core.client.renderer.entity.layers;
 
 import java.util.function.Consumer;
 import org.apache.commons.lang3.Validate;
-import com.craftingdead.core.capability.ModCapabilities;
+import com.craftingdead.core.capability.Capabilities;
 import com.craftingdead.core.client.util.RenderUtil;
-import com.craftingdead.core.world.inventory.InventorySlotType;
+import com.craftingdead.core.world.inventory.ModEquipmentSlotType;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.IRenderTypeBuffer;
@@ -42,7 +42,7 @@ import net.minecraft.item.ItemStack;
 public class EquipmentLayer<T extends LivingEntity, M extends BipedModel<T>>
     extends LayerRenderer<T, M> {
 
-  private final InventorySlotType slot;
+  private final ModEquipmentSlotType slot;
 
   /**
    * Whether this model should be rotated when the player is crouching.
@@ -75,7 +75,7 @@ public class EquipmentLayer<T extends LivingEntity, M extends BipedModel<T>>
 
     ItemRenderer itemRenderer = Minecraft.getInstance().getItemRenderer();
 
-    entity.getCapability(ModCapabilities.LIVING).ifPresent(living -> {
+    entity.getCapability(Capabilities.LIVING).ifPresent(living -> {
 
       ItemStack itemStack = living.getItemHandler().getStackInSlot(this.slot.getIndex());
 
@@ -120,7 +120,7 @@ public class EquipmentLayer<T extends LivingEntity, M extends BipedModel<T>>
 
   public static class Builder<T extends LivingEntity, M extends BipedModel<T>> {
     private LivingRenderer<T, M> entityRenderer;
-    private InventorySlotType slot;
+    private ModEquipmentSlotType slot;
     private Consumer<MatrixStack> tranformation;
     private boolean useCrouchingOrientation;
     private boolean useHeadOrientation;
@@ -130,7 +130,7 @@ public class EquipmentLayer<T extends LivingEntity, M extends BipedModel<T>>
       return this;
     }
 
-    public Builder<T, M> withSlot(InventorySlotType slot) {
+    public Builder<T, M> withSlot(ModEquipmentSlotType slot) {
       this.slot = slot;
       return this;
     }

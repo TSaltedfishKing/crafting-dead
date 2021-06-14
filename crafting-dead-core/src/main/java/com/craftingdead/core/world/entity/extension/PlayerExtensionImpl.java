@@ -18,14 +18,14 @@
 
 package com.craftingdead.core.world.entity.extension;
 
-import com.craftingdead.core.capability.ModCapabilities;
+import com.craftingdead.core.capability.Capabilities;
 import com.craftingdead.core.event.OpenEquipmentMenuEvent;
 import com.craftingdead.core.network.NetworkChannel;
+import com.craftingdead.core.network.SynchedData;
 import com.craftingdead.core.network.message.play.KillFeedMessage;
-import com.craftingdead.core.network.util.NetworkDataManager;
 import com.craftingdead.core.world.damagesource.KillFeedProvider;
 import com.craftingdead.core.world.inventory.EquipmentMenu;
-import com.craftingdead.core.world.inventory.InventorySlotType;
+import com.craftingdead.core.world.inventory.ModEquipmentSlotType;
 import net.minecraft.entity.Pose;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.inventory.container.SimpleNamedContainerProvider;
@@ -36,13 +36,14 @@ import net.minecraft.network.datasync.DataSerializers;
 import net.minecraft.util.DamageSource;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.text.TranslationTextComponent;
+import net.minecraft.world.GameRules;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.network.PacketDistributor;
 
 class PlayerExtensionImpl<E extends PlayerEntity>
     extends LivingExtensionImpl<E, PlayerHandler> implements PlayerExtension<E> {
 
-  private final NetworkDataManager dataManager = new NetworkDataManager();
+  private final SynchedData dataManager = new SynchedData();
 
   private static final DataParameter<Boolean> COMBAT_MODE_ENABLED =
       new DataParameter<>(0x02, DataSerializers.BOOLEAN);
@@ -80,12 +81,12 @@ class PlayerExtensionImpl<E extends PlayerEntity>
 
   @Override
   public boolean isMovementBlocked() {
-    return !this.entity.isSpectator() && super.isMovementBlocked();
+    return !this.getEntity().isSpectator() && super.isMovementBlocked();
   }
 
   @Override
   public boolean isCombatModeEnabled() {
-    return !this.entity.isSpectator()
+    return !this.getEntity().isSpectator()
         && (this.cachedCombatModeEnabled || this.dataManager.get(COMBAT_MODE_ENABLED));
   }
 
@@ -99,21 +100,19 @@ class PlayerExtensionImpl<E extends PlayerEntity>
     if (MinecraftForge.EVENT_BUS.post(new OpenEquipmentMenuEvent(this))) {
       return;
     }
-    this.getEntity().openMenu(new SimpleNamedContainerProvider((windowId, playerInventory,
-        playerEntity) -> new EquipmentMenu(windowId, this.getEntity().inventory),
+    this.getEntity().openMenu(new SimpleNamedContainerProvider(
+        (windowId, playerInventory, playerEntity) -> new EquipmentMenu(windowId,
+            this.getEntity().inventory),
         new TranslationTextComponent("container.equipment")));
   }
 
   @Override
-  public void openStorage(InventorySlotType slotType) {
+  public void openStorage(ModEquipmentSlotType slotType) {
     ItemStack storageStack = this.getItemHandler().getStackInSlot(slotType.getIndex());
-    storageStack
-        .getCapability(ModCapabilities.STORAGE)
-        .ifPresent(storage -> this.getEntity()
-            .openMenu(
-                new SimpleNamedContainerProvider(storage, storageStack.getHoverName())));
+    storageStack.getCapability(Capabilities.STORAGE)
+        .ifPresent(storage -> this.getEntity().openMenu(
+            new SimpleNamedContainerProvider(storage, storageStack.getHoverName())));
   }
-
 
   @Override
   public boolean onDeath(DamageSource source) {
@@ -121,16 +120,21 @@ class PlayerExtensionImpl<E extends PlayerEntity>
       return true;
     } else if (source instanceof KillFeedProvider) {
       NetworkChannel.PLAY.getSimpleChannel().send(PacketDistributor.ALL.noArg(),
-          new KillFeedMessage(((KillFeedProvider) source).createKillFeedEntry(this.entity)));
+          new KillFeedMessage(((KillFeedProvider) source).createKillFeedEntry(this.getEntity())));
     }
     return false;
+  }
+
+  @Override
+  protected boolean keepInventory() {
+    return this.getLevel().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY);
   }
 
   @Override
   public void copyFrom(PlayerExtension<?> that, boolean wasDeath) {
     // Copies the inventory. Doesn't actually matter if it was death or not.
     // Death drops from 'that' should be cleared on death drops to prevent item duplication.
-    for (int i = 0; i < that.getItemHandler().getSlots() - 1; i++) {
+    for (int i = 0; i < that.getItemHandler().getSlots(); i++) {
       this.getItemHandler().setStackInSlot(i, that.getItemHandler().getStackInSlot(i));
     }
 
@@ -139,21 +143,21 @@ class PlayerExtensionImpl<E extends PlayerEntity>
     }
   }
 
-  public NetworkDataManager getDataManager() {
+  public SynchedData getDataManager() {
     return this.dataManager;
   }
 
   @Override
   public void encode(PacketBuffer out, boolean writeAll) {
     super.encode(out, writeAll);
-    NetworkDataManager
-        .writeEntries(writeAll ? this.dataManager.getAll() : this.dataManager.getDirty(), out);
+    SynchedData.writeEntries(
+        writeAll ? this.dataManager.getAll() : this.dataManager.getDirty(), out);
   }
 
   @Override
   public void decode(PacketBuffer in) {
     super.decode(in);
-    this.dataManager.setEntryValues(NetworkDataManager.readEntries(in));
+    this.dataManager.setEntryValues(SynchedData.readEntries(in));
   }
 
   @Override

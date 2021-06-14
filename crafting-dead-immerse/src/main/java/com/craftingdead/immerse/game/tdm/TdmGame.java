@@ -26,8 +26,9 @@ import java.util.function.Consumer;
 import com.craftingdead.core.event.CombatPickupEvent;
 import com.craftingdead.core.event.GunEvent;
 import com.craftingdead.core.event.OpenEquipmentMenuEvent;
-import com.craftingdead.core.network.util.NetworkDataManager;
+import com.craftingdead.core.network.SynchedData;
 import com.craftingdead.core.world.gun.ammoprovider.RefillableAmmoProvider;
+import com.craftingdead.core.world.gun.attachment.Attachments;
 import com.craftingdead.core.world.item.ModItems;
 import com.craftingdead.immerse.game.Game;
 import com.craftingdead.immerse.game.GameType;
@@ -54,7 +55,7 @@ public abstract class TdmGame<M extends Module> implements Game<M> {
   private static final DataParameter<String> DISPLAY_NAME =
       new DataParameter<>(0x03, DataSerializers.STRING);
 
-  private final NetworkDataManager dataManager = new NetworkDataManager();
+  private final SynchedData dataManager = new SynchedData();
 
   private final Map<UUID, TdmPlayerData> playerData = new Object2ObjectOpenHashMap<>();
   private final Map<UUID, TdmPlayerData> dirtyPlayerData = new Object2ObjectOpenHashMap<>();
@@ -86,7 +87,7 @@ public abstract class TdmGame<M extends Module> implements Game<M> {
 
   @Override
   public void encode(PacketBuffer packetBuffer, boolean writeAll) {
-    NetworkDataManager.writeEntries(
+    SynchedData.writeEntries(
         writeAll ? this.dataManager.getAll() : this.dataManager.getDirty(), packetBuffer);
     Set<Map.Entry<UUID, TdmPlayerData>> playerDataCollection =
         writeAll ? this.playerData.entrySet() : this.dirtyPlayerData.entrySet();
@@ -109,7 +110,7 @@ public abstract class TdmGame<M extends Module> implements Game<M> {
 
   @Override
   public void decode(PacketBuffer packetBuffer) {
-    this.dataManager.setEntryValues(NetworkDataManager.readEntries(packetBuffer));
+    this.dataManager.setEntryValues(SynchedData.readEntries(packetBuffer));
     int playerDataSize = packetBuffer.readVarInt();
     for (int i = 0; i < playerDataSize; i++) {
       UUID playerId = packetBuffer.readUUID();
@@ -142,7 +143,7 @@ public abstract class TdmGame<M extends Module> implements Game<M> {
 
     Item item = event.getItemStack().getItem();
     if (item == ModItems.AWP.get() || item == ModItems.M107.get() || item == ModItems.AS50.get()) {
-      event.addAttachment(ModItems.LP_SCOPE.get());
+      event.addAttachment(Attachments.LP_SCOPE.get());
     }
   }
 
@@ -204,7 +205,7 @@ public abstract class TdmGame<M extends Module> implements Game<M> {
   }
 
   @Override
-  public GameType getGameType() {
+  public GameType getType() {
     return GameTypes.TEAM_DEATHMATCH.get();
   }
 }

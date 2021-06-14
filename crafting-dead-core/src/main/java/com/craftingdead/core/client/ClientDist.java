@@ -25,7 +25,7 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.lwjgl.glfw.GLFW;
 import com.craftingdead.core.CraftingDead;
 import com.craftingdead.core.ModDist;
-import com.craftingdead.core.capability.ModCapabilities;
+import com.craftingdead.core.capability.Capabilities;
 import com.craftingdead.core.client.crosshair.CrosshairManager;
 import com.craftingdead.core.client.gui.IngameGui;
 import com.craftingdead.core.client.gui.screen.inventory.EquipmentScreen;
@@ -40,6 +40,7 @@ import com.craftingdead.core.client.renderer.entity.grenade.SlimGrenadeRenderer;
 import com.craftingdead.core.client.renderer.entity.layers.ClothingLayer;
 import com.craftingdead.core.client.renderer.entity.layers.EquipmentLayer;
 import com.craftingdead.core.client.renderer.entity.layers.ParachuteLayer;
+import com.craftingdead.core.client.renderer.item.GunRenderer;
 import com.craftingdead.core.client.renderer.item.ItemRendererManager;
 import com.craftingdead.core.client.sounds.EffectsManager;
 import com.craftingdead.core.client.tutorial.ModTutorialStepInstance;
@@ -56,16 +57,16 @@ import com.craftingdead.core.world.entity.extension.LivingExtension;
 import com.craftingdead.core.world.entity.extension.PlayerExtension;
 import com.craftingdead.core.world.entity.grenade.FlashGrenadeEntity;
 import com.craftingdead.core.world.gun.Gun;
-import com.craftingdead.core.world.gun.paint.Paint;
-import com.craftingdead.core.world.inventory.InventorySlotType;
+import com.craftingdead.core.world.inventory.ModEquipmentSlotType;
 import com.craftingdead.core.world.inventory.ModMenuTypes;
 import com.craftingdead.core.world.item.ArbitraryTooltips;
 import com.craftingdead.core.world.item.ArbitraryTooltips.TooltipFunction;
 import com.craftingdead.core.world.item.GunItem;
 import com.craftingdead.core.world.item.ModItems;
-import com.craftingdead.core.world.item.PaintItem;
+import com.craftingdead.core.world.item.RegisterGunColour;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.audio.SimpleSound;
 import net.minecraft.client.entity.player.AbstractClientPlayerEntity;
 import net.minecraft.client.entity.player.ClientPlayerEntity;
 import net.minecraft.client.gui.ScreenManager;
@@ -94,8 +95,10 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.potion.EffectInstance;
 import net.minecraft.resources.IReloadableResourceManager;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.SoundEvent;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.vector.Vector3d;
 import net.minecraft.util.math.vector.Vector3f;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextFormatting;
@@ -123,13 +126,13 @@ import net.minecraftforge.event.entity.player.ItemTooltipEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.ModLoadingContext;
-import net.minecraftforge.fml.RegistryObject;
 import net.minecraftforge.fml.StartupMessageManager;
 import net.minecraftforge.fml.client.registry.ClientRegistry;
 import net.minecraftforge.fml.client.registry.RenderingRegistry;
 import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.registries.ForgeRegistries;
 
 public class ClientDist implements ModDist {
 
@@ -255,14 +258,14 @@ public class ClientDist implements ModDist {
   @SuppressWarnings("unchecked")
   public Optional<PlayerExtension<ClientPlayerEntity>> getPlayer() {
     return Optional.ofNullable(this.minecraft.player)
-        .flatMap(p -> p.getCapability(ModCapabilities.LIVING).resolve())
+        .flatMap(p -> p.getCapability(Capabilities.LIVING).resolve())
         .filter(living -> living instanceof PlayerExtension)
         .map(living -> (PlayerExtension<ClientPlayerEntity>) living);
   }
 
   @SuppressWarnings("unchecked")
   public PlayerExtension<ClientPlayerEntity> getExpectedPlayer() {
-    return ModCapabilities.getExpected(ModCapabilities.LIVING, this.minecraft.player,
+    return Capabilities.getOrThrow(Capabilities.LIVING, this.minecraft.player,
         PlayerExtension.class);
   }
 
@@ -272,6 +275,20 @@ public class ClientDist implements ModDist {
 
   public boolean isLocalPlayer(Entity entity) {
     return entity == this.minecraft.player;
+  }
+
+  public void handleHit(Vector3d hitPos, boolean dead) {
+    clientConfig.hitMarkerMode.get().createHitMarker(hitPos, dead)
+        .ifPresent(this.ingameGui::displayHitMarker);
+    if (dead && ClientDist.clientConfig.killSoundEnabled.get()) {
+      // Plays a sound that follows the player
+      SoundEvent soundEvent = ForgeRegistries.SOUND_EVENTS
+          .getValue(new ResourceLocation(ClientDist.clientConfig.killSound.get()));
+      if (soundEvent != null) {
+        Minecraft.getInstance().getSoundManager().play(
+            SimpleSound.forUI(soundEvent, 5.0F, 1.5F));
+      }
+    }
   }
 
   // ================================================================================
@@ -305,9 +322,9 @@ public class ClientDist implements ModDist {
 
   private void handleClientSetup(FMLClientSetupEvent event) {
     ItemModelsProperties.registerGeneric(new ResourceLocation("wearing"),
-        (itemStack, world, entity) -> entity.getCapability(ModCapabilities.LIVING)
+        (itemStack, world, entity) -> entity.getCapability(Capabilities.LIVING)
             .filter(living -> living.getItemHandler()
-                .getStackInSlot(InventorySlotType.HAT.getIndex()) == itemStack)
+                .getStackInSlot(ModEquipmentSlotType.HAT.getIndex()) == itemStack)
             .map(__ -> 1.0F)
             .orElse(0.0F));
 
@@ -350,19 +367,19 @@ public class ClientDist implements ModDist {
     this.registerPlayerLayer(
         renderer -> new EquipmentLayer.Builder<AbstractClientPlayerEntity, PlayerModel<AbstractClientPlayerEntity>>()
             .withRenderer(renderer)
-            .withSlot(InventorySlotType.MELEE)
+            .withSlot(ModEquipmentSlotType.MELEE)
             .withCrouchingOrientation(true)
             .build());
     this.registerPlayerLayer(
         renderer -> new EquipmentLayer.Builder<AbstractClientPlayerEntity, PlayerModel<AbstractClientPlayerEntity>>()
             .withRenderer(renderer)
-            .withSlot(InventorySlotType.VEST)
+            .withSlot(ModEquipmentSlotType.VEST)
             .withCrouchingOrientation(true)
             .build());
     this.registerPlayerLayer(
         renderer -> new EquipmentLayer.Builder<AbstractClientPlayerEntity, PlayerModel<AbstractClientPlayerEntity>>()
             .withRenderer(renderer)
-            .withSlot(InventorySlotType.HAT)
+            .withSlot(ModEquipmentSlotType.HAT)
             .withHeadOrientation(true)
             // Inverts X and Y rotation. This is from Mojang, based on HeadLayer.class.
             // TODO Find a reason to not remove this line. Also, if you remove it, you will
@@ -372,7 +389,7 @@ public class ClientDist implements ModDist {
     this.registerPlayerLayer(
         renderer -> new EquipmentLayer.Builder<AbstractClientPlayerEntity, PlayerModel<AbstractClientPlayerEntity>>()
             .withRenderer(renderer)
-            .withSlot(InventorySlotType.GUN)
+            .withSlot(ModEquipmentSlotType.GUN)
             .withCrouchingOrientation(true)
             .build());
   }
@@ -400,35 +417,10 @@ public class ClientDist implements ModDist {
   }
 
   private void handleItemColor(ColorHandlerEvent.Item event) {
-    IItemColor gunColor = (stack, tintIndex) -> stack
-        .getCapability(ModCapabilities.GUN)
-        .resolve()
-        .flatMap(gunController -> gunController
-            .getPaintStack()
-            .getCapability(ModCapabilities.PAINT)
-            .resolve()
-            .flatMap(Paint::getColour))
-        .orElse(0xFFFFFF) | 0xFF << 24;
-
-    ModItems.ITEMS
-        .getEntries()
-        .stream()
-        .map(RegistryObject::get)
-        .filter(item -> item instanceof GunItem)
-        .forEach(item -> event.getItemColors().register(gunColor, item));
-
-    IItemColor paintColor = (stack, tintIndex) -> stack
-        .getCapability(ModCapabilities.PAINT)
-        .resolve()
-        .flatMap(Paint::getColour)
-        .orElse(Integer.MAX_VALUE);
-
-    ModItems.ITEMS
-        .getEntries()
-        .stream()
-        .map(RegistryObject::get)
-        .filter(item -> item instanceof PaintItem)
-        .forEach(item -> event.getItemColors().register(paintColor, () -> item));
+    IItemColor gunColour = (itemStack, tintIndex) -> GunRenderer.getColour(itemStack);
+    ForgeRegistries.ITEMS.getValues().stream()
+        .filter(item -> item.getClass().isAnnotationPresent(RegisterGunColour.class))
+        .forEach(item -> event.getItemColors().register(gunColour, item));
   }
 
   private void handleTextureStitch(TextureStitchEvent.Pre event) {
@@ -466,7 +458,7 @@ public class ClientDist implements ModDist {
         PlayerExtension<ClientPlayerEntity> player = this.getPlayer().orElse(null);
         if (player != null) {
           ItemStack heldStack = player.getEntity().getMainHandItem();
-          Gun gun = heldStack.getCapability(ModCapabilities.GUN).orElse(null);
+          Gun gun = heldStack.getCapability(Capabilities.GUN).orElse(null);
 
           boolean worldFocused = !this.minecraft.isPaused() && this.minecraft.overlay == null
               && (this.minecraft.screen == null);
@@ -479,8 +471,8 @@ public class ClientDist implements ModDist {
               if (gun.isTriggerPressed()) {
                 gun.setTriggerPressed(player, false, true);
               }
-              if (gun.isPerformingRightMouseAction()) {
-                gun.setPerformingRightMouseAction(player, false, true);
+              if (gun.isPerformingSecondaryAction()) {
+                gun.setPerformingSecondaryAction(player, false, true);
               }
             }
             return;
@@ -555,7 +547,7 @@ public class ClientDist implements ModDist {
     if (player != null && this.minecraft.overlay == null
         && this.minecraft.screen == null && !player.getEntity().isSpectator()) {
       ItemStack heldStack = player.getEntity().getMainHandItem();
-      Gun gun = heldStack.getCapability(ModCapabilities.GUN).orElse(null);
+      Gun gun = heldStack.getCapability(Capabilities.GUN).orElse(null);
       if (this.minecraft.options.keyAttack.matchesMouse(event.getButton())) {
         boolean triggerPressed = event.getAction() == GLFW.GLFW_PRESS;
         if (gun != null) {
@@ -564,14 +556,13 @@ public class ClientDist implements ModDist {
         }
       } else if (this.minecraft.options.keyUse.matchesMouse(event.getButton())) {
         if (gun != null) {
-          switch (gun.getRightMouseActionTriggerType()) {
+          switch (gun.getSecondaryActionTrigger()) {
             case HOLD:
-              gun.setPerformingRightMouseAction(player, event.getAction() == GLFW.GLFW_PRESS, true);
+              gun.setPerformingSecondaryAction(player, event.getAction() == GLFW.GLFW_PRESS, true);
               break;
-            case CLICK:
+            case TOGGLE:
               if (event.getAction() == GLFW.GLFW_PRESS) {
-                gun.setPerformingRightMouseAction(player, !gun.isPerformingRightMouseAction(),
-                    true);
+                gun.setPerformingSecondaryAction(player, !gun.isPerformingSecondaryAction(), true);
               }
               break;
             default:
@@ -607,7 +598,7 @@ public class ClientDist implements ModDist {
   public void handleRenderGameOverlayPre(RenderGameOverlayEvent.Pre event) {
     PlayerExtension<AbstractClientPlayerEntity> player =
         this.minecraft.getCameraEntity() instanceof AbstractClientPlayerEntity
-            ? this.minecraft.getCameraEntity().getCapability(ModCapabilities.LIVING)
+            ? this.minecraft.getCameraEntity().getCapability(Capabilities.LIVING)
                 .<PlayerExtension<AbstractClientPlayerEntity>>cast()
                 .orElse(null)
             : null;
@@ -615,7 +606,7 @@ public class ClientDist implements ModDist {
       return;
     }
     ItemStack heldStack = player.getEntity().getMainHandItem();
-    Gun gun = heldStack.getCapability(ModCapabilities.GUN).orElse(null);
+    Gun gun = heldStack.getCapability(Capabilities.GUN).orElse(null);
     switch (event.getType()) {
       case HEALTH:
       case HOTBAR:
@@ -632,7 +623,7 @@ public class ClientDist implements ModDist {
             event.getPartialTicks());
         break;
       case CROSSHAIRS:
-        boolean isAiming = heldStack.getCapability(ModCapabilities.SCOPE)
+        boolean isAiming = heldStack.getCapability(Capabilities.SCOPE)
             .map(scope -> scope.isAiming(player.getEntity()))
             .orElse(false);
         if (player.isMonitoringAction() || isAiming) {
@@ -642,7 +633,7 @@ public class ClientDist implements ModDist {
 
         if (gun != null) {
           event.setCanceled(true);
-          if (gun.hasCrosshair()) {
+          if (gun.getClient().hasCrosshair()) {
             this.ingameGui.renderCrosshairs(gun.getAccuracy(player),
                 event.getPartialTicks(), event.getWindow().getGuiScaledWidth(),
                 event.getWindow().getGuiScaledHeight());
@@ -673,7 +664,7 @@ public class ClientDist implements ModDist {
     if (this.minecraft.getCameraEntity() instanceof LivingEntity) {
       LivingEntity livingEntity = (LivingEntity) this.minecraft.getCameraEntity();
       ItemStack heldStack = livingEntity.getMainHandItem();
-      float newFov = heldStack.getCapability(ModCapabilities.SCOPE)
+      float newFov = heldStack.getCapability(Capabilities.SCOPE)
           .filter(scope -> scope.isAiming(livingEntity))
           .map(scope -> 1 / scope.getZoomMultiplier(livingEntity)).orElse(1.0F);
 
@@ -767,10 +758,10 @@ public class ClientDist implements ModDist {
       int packedLight, AbstractClientPlayerEntity playerEntity, ModelRenderer armRenderer,
       ModelRenderer armwearRenderer) {
 
-    ResourceLocation clothingTexture = playerEntity.getCapability(ModCapabilities.LIVING)
+    ResourceLocation clothingTexture = playerEntity.getCapability(Capabilities.LIVING)
         .map(LivingExtension::getItemHandler)
-        .map(itemHandler -> itemHandler.getStackInSlot(InventorySlotType.CLOTHING.getIndex()))
-        .flatMap(clothingStack -> clothingStack.getCapability(ModCapabilities.CLOTHING).resolve())
+        .map(itemHandler -> itemHandler.getStackInSlot(ModEquipmentSlotType.CLOTHING.getIndex()))
+        .flatMap(clothingStack -> clothingStack.getCapability(Capabilities.CLOTHING).resolve())
         .map(clothing -> clothing.getTexture(playerEntity.getModelName()))
         .orElse(null);
 

@@ -21,7 +21,7 @@ package com.craftingdead.core.world.item;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import javax.annotation.Nullable;
-import com.craftingdead.core.capability.ModCapabilities;
+import com.craftingdead.core.capability.Capabilities;
 import com.craftingdead.core.world.action.ActionType;
 import com.craftingdead.core.world.entity.extension.LivingExtension;
 import com.craftingdead.core.world.action.Action;
@@ -58,8 +58,7 @@ public class ActionItem extends Item {
   }
 
   @Override
-  public ActionResult<ItemStack> use(World world, PlayerEntity playerEntity,
-      Hand hand) {
+  public ActionResult<ItemStack> use(World world, PlayerEntity playerEntity, Hand hand) {
     if (!playerEntity.level.isClientSide()) {
       this.performAction(playerEntity, null);
     }
@@ -68,11 +67,11 @@ public class ActionItem extends Item {
 
   public void performAction(LivingEntity performerEntity, LivingEntity targetEntity) {
     if (this.entityActionFactory != null) {
-      performerEntity.getCapability(ModCapabilities.LIVING)
+      performerEntity.getCapability(Capabilities.LIVING)
           .ifPresent(performer -> performer.performAction(
               this.entityActionFactory.apply(performer, targetEntity == null
                   ? null
-                  : targetEntity.getCapability(ModCapabilities.LIVING).orElse(null)),
+                  : targetEntity.getCapability(Capabilities.LIVING).orElse(null)),
               false, true));
     }
   }
@@ -84,7 +83,7 @@ public class ActionItem extends Item {
     @Nullable
     private BiFunction<LivingExtension<?, ?>, LivingExtension<?, ?>, Action> entityActionFactory;
 
-    public Properties setAction(Supplier<? extends ActionType<?>> actionType) {
+    public Properties setAction(Supplier<? extends ActionType> actionType) {
       // Can't use method reference because don't want to resolve the supplier too early.
       this.entityActionFactory =
           (performer, target) -> actionType.get().createAction(performer, target);

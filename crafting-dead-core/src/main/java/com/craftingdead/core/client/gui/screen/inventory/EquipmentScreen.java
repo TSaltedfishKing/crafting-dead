@@ -19,12 +19,12 @@
 package com.craftingdead.core.client.gui.screen.inventory;
 
 import com.craftingdead.core.CraftingDead;
-import com.craftingdead.core.capability.ModCapabilities;
+import com.craftingdead.core.capability.Capabilities;
 import com.craftingdead.core.client.gui.SimpleButton;
 import com.craftingdead.core.network.NetworkChannel;
 import com.craftingdead.core.network.message.play.OpenStorageMessage;
 import com.craftingdead.core.world.inventory.EquipmentMenu;
-import com.craftingdead.core.world.inventory.InventorySlotType;
+import com.craftingdead.core.world.inventory.ModEquipmentSlotType;
 import com.mojang.blaze3d.matrix.MatrixStack;
 import net.minecraft.client.gui.DisplayEffectsScreen;
 import net.minecraft.client.gui.screen.inventory.InventoryScreen;
@@ -60,7 +60,7 @@ public class EquipmentScreen extends DisplayEffectsScreen<EquipmentMenu> {
     this.vestButton =
         new SimpleButton(this.leftPos + 98, this.topPos + 61, 10, 17, ARROW, (button) -> {
           NetworkChannel.PLAY.getSimpleChannel()
-              .sendToServer(new OpenStorageMessage(InventorySlotType.VEST));
+              .sendToServer(new OpenStorageMessage(ModEquipmentSlotType.VEST));
           this.transitioning = true;
         });
     this.addButton(this.vestButton);
@@ -84,8 +84,8 @@ public class EquipmentScreen extends DisplayEffectsScreen<EquipmentMenu> {
   private void refreshButtonStatus() {
     this.vestButton.active = this.menu
         .getItemHandler()
-        .getStackInSlot(InventorySlotType.VEST.getIndex())
-        .getCapability(ModCapabilities.STORAGE)
+        .getStackInSlot(ModEquipmentSlotType.VEST.getIndex())
+        .getCapability(Capabilities.STORAGE)
         .isPresent();
   }
 
@@ -100,28 +100,29 @@ public class EquipmentScreen extends DisplayEffectsScreen<EquipmentMenu> {
   protected void renderLabels(MatrixStack matrixStack, int x, int y) {}
 
   @Override
-  protected void renderBg(MatrixStack matrixStack, float partialTicks,
-      int mouseX, int mouseY) {
+  protected void renderBg(MatrixStack matrixStack, float partialTicks, int mouseX, int mouseY) {
     this.renderBackground(matrixStack);
     this.minecraft.getTextureManager().bind(BACKGROUND);
 
     this.blit(matrixStack, this.leftPos, this.topPos, 0, 0, this.imageWidth, this.imageHeight);
 
     ItemStack gunStack = this.menu.getGunStack();
-    gunStack.getCapability(ModCapabilities.GUN).ifPresent(gunController -> {
+    gunStack.getCapability(Capabilities.GUN).ifPresent(gun -> {
 
       final int gunSlotX = this.leftPos + 122;
       final int gunSlotY = this.topPos + 26;
 
       this.blit(matrixStack, gunSlotX, gunSlotY, 176, 0, 22, 22);
 
-      final boolean draggingItemAccepted =
-          gunController.isAcceptedPaintOrAttachment(this.inventory.getCarried());
+      final boolean carriedItemAccepted =
+          gun.isAcceptedPaintOrAttachment(this.inventory.getCarried());
 
       if ((!this.menu.isCraftingInventoryEmpty() && this.menu.isCraftable())
-          || draggingItemAccepted) {
+          || carriedItemAccepted) {
+        // Green outline
         this.blit(matrixStack, gunSlotX, gunSlotY, 176, 22, 22, 22);
-      } else if (!this.inventory.getCarried().isEmpty() && !draggingItemAccepted) {
+      } else if (!this.inventory.getCarried().isEmpty() && !carriedItemAccepted) {
+        // Red outline
         this.blit(matrixStack, gunSlotX, gunSlotY, 176, 44, 22, 22);
       }
     });

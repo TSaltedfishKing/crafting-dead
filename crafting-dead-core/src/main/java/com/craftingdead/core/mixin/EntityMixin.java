@@ -22,35 +22,42 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import com.craftingdead.core.capability.Capabilities;
 import com.craftingdead.core.world.entity.extension.LivingExtension;
 import com.craftingdead.core.world.entity.extension.Visibility;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 
 @Mixin(Entity.class)
 public class EntityMixin {
 
+  /**
+   * Adds hook for {@link LivingExtension#isInvisible}.
+   */
   @Inject(method = "isInvisible", at = @At("HEAD"), cancellable = true)
   private void isInvisible(CallbackInfoReturnable<Boolean> callbackInfo) {
     Entity entity = (Entity) (Object) this;
-    if (entity instanceof LivingEntity && LivingExtension.getOptional((LivingEntity) entity)
-        .map(LivingExtension::getVisibility)
-        .map(v -> v == Visibility.INVISIBLE || v == Visibility.PARTIALLY_VISIBLE)
-        .orElse(false)) {
-      callbackInfo.setReturnValue(true);
-    }
+    // It's faster not flat-mapping or filtering (we want to be fast in a render method)
+    entity.getCapability(Capabilities.LIVING).ifPresent(living -> {
+      if (living.getVisibility() == Visibility.INVISIBLE
+          || living.getVisibility() == Visibility.PARTIALLY_VISIBLE) {
+        callbackInfo.setReturnValue(true);
+      }
+    });
   }
 
+  /**
+   * Adds hook for {@link LivingExtension#isInvisible}.
+   */
   @Inject(method = "isInvisibleTo", at = @At("HEAD"), cancellable = true)
   private void isInvisibleTo(PlayerEntity playerEntity,
       CallbackInfoReturnable<Boolean> callbackInfo) {
     Entity entity = (Entity) (Object) this;
-    if (entity instanceof LivingEntity && LivingExtension.getOptional((LivingEntity) entity)
-        .map(LivingExtension::getVisibility)
-        .map(Visibility.PARTIALLY_VISIBLE::equals)
-        .orElse(false)) {
-      callbackInfo.setReturnValue(false);
-    }
+    // It's faster not flat-mapping or filtering (we want to be fast in a render method)
+    entity.getCapability(Capabilities.LIVING).ifPresent(living -> {
+      if (living.getVisibility() == Visibility.PARTIALLY_VISIBLE) {
+        callbackInfo.setReturnValue(false);
+      }
+    });
   }
 }

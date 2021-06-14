@@ -20,15 +20,9 @@ package com.craftingdead.core.network.message.play;
 
 import java.util.function.Supplier;
 import com.craftingdead.core.CraftingDead;
-import com.craftingdead.core.client.ClientDist;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.network.PacketBuffer;
-import net.minecraft.util.ResourceLocation;
-import net.minecraft.util.SoundCategory;
-import net.minecraft.util.SoundEvent;
 import net.minecraft.util.math.vector.Vector3d;
 import net.minecraftforge.fml.network.NetworkEvent;
-import net.minecraftforge.registries.ForgeRegistries;
 
 public class HitMessage {
 
@@ -40,11 +34,11 @@ public class HitMessage {
     this.dead = dead;
   }
 
-  public static void encode(HitMessage msg, PacketBuffer out) {
-    out.writeDouble(msg.hitPos.x());
-    out.writeDouble(msg.hitPos.y());
-    out.writeDouble(msg.hitPos.z());
-    out.writeBoolean(msg.dead);
+  public void encode(PacketBuffer out) {
+    out.writeDouble(this.hitPos.x());
+    out.writeDouble(this.hitPos.y());
+    out.writeDouble(this.hitPos.z());
+    out.writeBoolean(this.dead);
   }
 
   public static HitMessage decode(PacketBuffer in) {
@@ -52,24 +46,10 @@ public class HitMessage {
         in.readBoolean());
   }
 
-  public static boolean handle(HitMessage msg, Supplier<NetworkEvent.Context> ctx) {
+  public boolean handle(Supplier<NetworkEvent.Context> ctx) {
     if (ctx.get().getDirection().getReceptionSide().isClient()) {
-      ctx.get().enqueueWork(() -> {
-        ClientDist clientDist = CraftingDead.getInstance().getClientDist();
-        ClientDist.clientConfig.hitMarkerMode.get().createHitMarker(msg.hitPos, msg.dead)
-            .ifPresent(clientDist.getIngameGui()::displayHitMarker);
-        if (msg.dead && ClientDist.clientConfig.killSoundEnabled.get()) {
-          // Plays a sound that follows the player
-          PlayerEntity playerEntity = clientDist.getExpectedPlayer().getEntity();
-          SoundEvent soundEvent = ForgeRegistries.SOUND_EVENTS
-              .getValue(new ResourceLocation(ClientDist.clientConfig.killSound.get()));
-          if (soundEvent != null) {
-            playerEntity.getCommandSenderWorld().playSound(
-                clientDist.getExpectedPlayer().getEntity(), playerEntity, soundEvent,
-                SoundCategory.HOSTILE, 5.0F, 1.5F);
-          }
-        }
-      });
+      ctx.get().enqueueWork(
+          () -> CraftingDead.getInstance().getClientDist().handleHit(this.hitPos, this.dead));
     }
     return true;
   }
